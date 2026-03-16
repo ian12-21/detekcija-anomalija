@@ -3,8 +3,9 @@
 Seminar project for Evolucijsko računarstvo — detecting anomalies (fraud) 
 in credit card transaction data using unsupervised machine learning algorithms.
 
-Based on: Agyemang, E.F. (2024) "Anomaly detection using unsupervised machine 
-learning algorithms: A simulation study", Scientific African.
+Based on: Agyemang, E.F. (2024) *"Anomaly detection using unsupervised machine
+learning algorithms: A simulation study"*, Scientific African.
+[Read the paper](https://www.sciencedirect.com/science/article/pii/S2468227624003284)
 
 ## Project Structure
 
@@ -32,8 +33,8 @@ anomaly-detection/
 ## How to Run
 
 ```bash
-cd src/
-python 01_explore_data.py
+source myenv/bin/activate
+jupyter notebook
 ```
 
 ## Dependencies
