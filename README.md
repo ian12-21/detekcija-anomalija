@@ -15,10 +15,8 @@ anomaly-detection/
 │   └── creditcard.csv
 ├── src/
 │   ├── 01_explore_data.py   # Step 1: Understand the data
-│   ├── 02_preprocessing.py  # Step 2: Clean & prepare (TODO)
-│   ├── 03_train_models.py   # Step 3: Train 5 algorithms (TODO)
-│   └── 04_evaluate.py       # Step 4: Compare results (TODO)
-├── results/                 # Saved plots and metrics
+│   ├── 02_preprocessing.py  # Step 2: Clean & prepare
+├── results/                 # Saved plots and metrics -> Optional
 └── README.md
 ```
 
