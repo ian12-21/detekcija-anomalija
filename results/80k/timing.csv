@@ -1,0 +1,6 @@
+,Fit Time (s),Predict Time (s),Total (s)
+One-Class SVM,40.7045,12.1498,52.8543
+One-Class SVM (SGD),0.1017,0.0098,0.1115
+Isolation Forest,0.3244,0.2446,0.569
+Local Outlier Factor,4.8068,0.0,4.8068
+Robust Covariance,8.559,0.0201,8.5791

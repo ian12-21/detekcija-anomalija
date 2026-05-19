@@ -1,0 +1,19 @@
+Sample size: 80,000 rows
+Frauds: 127
+Contamination: 0.1588%
+Best F1: Isolation Forest (33.86%)
+
+                     Accuracy Precision   Recall F1 Score
+Model                                                    
+One-Class SVM         96.34 %    2.22 %  51.18 %   4.25 %
+One-Class SVM (SGD)   99.84 %     0.0 %    0.0 %    0.0 %
+Isolation Forest      99.79 %   33.86 %  33.86 %  33.86 %
+Local Outlier Factor  99.68 %     0.0 %    0.0 %    0.0 %
+Robust Covariance     99.73 %   15.75 %  15.75 %  15.75 %
+
+                      Fit Time (s)  Predict Time (s)  Total (s)
+One-Class SVM               40.705            12.150     52.854
+One-Class SVM (SGD)          0.102             0.010      0.111
+Isolation Forest             0.324             0.245      0.569
+Local Outlier Factor         4.807             0.000      4.807
+Robust Covariance            8.559             0.020      8.579
