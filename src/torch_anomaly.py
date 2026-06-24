@@ -85,7 +85,7 @@ class AutoencoderDetector:
             raise RuntimeError("Call fit() before decision_function().")
         self.model_.eval()
         data = self._to_tensor(X).to(self.device)
-        errs = torch.empty(data.shape[0], device=self.device)
+        errs = torch.zeros(data.shape[0], device=self.device)
         with torch.no_grad():
             for i in range(0, data.shape[0], self.batch_size):
                 batch = data[i:i + self.batch_size]

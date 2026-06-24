@@ -8,6 +8,7 @@ comparison in ../results/comparison/.
 
 Run:  ~/miniconda3/envs/uni/bin/python run_sample_size_experiment.py
 """
+import itertools
 import os
 import time
 import warnings
@@ -286,7 +287,7 @@ def main():
                           ("R2", "r2_vs_size.png"),
                           ("Total Time (s)", "runtime_vs_size.png")]:
         fig, ax = plt.subplots(figsize=(10, 6))
-        for model, c in zip(models, COLORS):
+        for model, c in zip(models, itertools.cycle(COLORS)):
             sub = long_df[long_df["Model"] == model]
             ax.plot(sub["Sample Size"], sub[metric], marker="o",
                     label=model, color=c, linewidth=2)
