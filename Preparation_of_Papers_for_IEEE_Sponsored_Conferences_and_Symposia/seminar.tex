@@ -26,7 +26,7 @@ kolegij Strojno učenje (ML5). {\tt\small ime.prezime@email.com}}%
 \pagestyle{empty}
 
 \begin{abstract}
-% TASK 9
+Detekcija prijevara kreditnim karticama otežana je ekstremnom neuravnoteženošću klasa, gdje prijevare čine svega 0,17\% transakcija, zbog čega točnost postaje zavaravajuća mjera. Ovaj rad validira simulacijsku studiju Agyemanga (2024) na velikom stvarnom skupu od 284\,807 transakcija, uspoređujući šest nenadziranih detektora anomalija i nadzirani baseline. Predstavlja se label-free MAD prag koji ne koristi oznake ni stvarnu stopu prijevara, a kao primarna mjera koristi se ROC-AUC, neovisna o pragu. Proveden je i prelazak po veličini uzorka od 30\,000 do 230\,000 transakcija. Rezultati pokazuju da Isolation Forest i One-Class SVM postižu stabilan ROC-AUC u pojasu 0,94--0,98 kroz sve veličine, no label-free pragovanje preflagira, pa F1-mjere ostaju niske --- raskorak između kvalitete rangiranja i binarne odluke ključni je praktični problem. Isolation Forest nudi najbolji omjer kvalitete i brzine.
 \end{abstract}
 
 \section{\textbf{UVOD}}
@@ -126,15 +126,179 @@ Primarna mjera je \textbf{ROC-AUC} (površina ispod ROC krivulje), izračunata n
 \end{figure}
 
 \section{\textbf{STUDIJA SLUČAJA}}
-% TASK 6
 \subsection{Skup podataka}
+
+Eksperimenti su provedeni na javno dostupnom skupu podataka \emph{Credit Card Fraud Detection} \cite{kaggle}, koji sadrži transakcije europskih vlasnika kartica zabilježene tijekom dva dana u rujnu 2013. Skup obuhvaća 284\,807 transakcija, od kojih je svega 492 prijevarno (0,17\%), što odgovara omjeru neravnoteže od približno 1:577 (Tablica~\ref{tab:dataset}). Značajke \texttt{V1}--\texttt{V28} rezultat su PCA transformacije izvornih obilježja (anonimizirane su zbog povjerljivosti), dok su \texttt{Time}, \texttt{Amount} i \texttt{Class} ostavljene u izvornom obliku. Skup ne sadrži nedostajuće vrijednosti.
+
+Pretprocesiranje je minimalno i jednako za sve modele: značajka \texttt{Time} se izbacuje jer nosi samo redni slijed transakcija, značajka \texttt{Amount} se standardizira (\texttt{StandardScaler}), a stupac \texttt{Class} koristi se isključivo za vrednovanje, nikada za treniranje nenadziranih modela. Konačni ulaz u modele čini 30 numeričkih značajki (\texttt{V1}--\texttt{V28} i skalirani \texttt{Amount}).
+
+Budući da nekoliko algoritama --- osobito One-Class SVM, LOF i Elliptic Envelope --- skalira približno kvadratno, $O(n^2)$, s brojem uzoraka, svi se modeli vrednuju na zajedničkom slučajnom poduzorku. Kako bi se ispitala osjetljivost na količinu podataka, proveden je prelazak (engl.\ \emph{sweep}) po četiri veličine: 30\,000, 80\,000, 150\,000 i 230\,000 transakcija, pri čemu se u svakom poduzorku očuvava prirodna neravnoteža klasa. Razmatraju se dva režima vrednovanja: nenadzirani modeli ocjenjuju se na cijelom poduzorku (bez podjele), dok se nadzirani baseline (Logistička regresija) uči na 70\% i vrednuje na preostalih 30\% stratificirano podijeljenog poduzorka.
+
+\begin{table}[t]
+\caption{Sastav skupa podataka (Kaggle Credit Card Fraud).}
+\label{tab:dataset}
+\centering
+\begin{tabular}{@{}ll@{}}
+\toprule
+Svojstvo & Vrijednost \\
+\midrule
+Ukupno transakcija     & 284\,807 \\
+Normalne (Class${=}0$) & 284\,315 (99,83\%) \\
+Prijevare (Class${=}1$)& 492 (0,17\%) \\
+Značajke za model      & 30 (V1--V28, Amount) \\
+Omjer neravnoteže      & $\approx 1:577$ \\
+Nedostajuće vrijednosti& 0 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
 \subsection{Vrednovanje}
 
+Kao primarna mjera kvalitete koristi se \textbf{ROC-AUC}, izračunata izravno na kontinuiranim anomaly scoreovima. Razlog tom izboru jest što je ROC-AUC neovisna o izboru praga --- mjeri sposobnost modela da prijevarne transakcije rangira ispred legitimnih --- i robusna je na ekstremnu neravnoteženost klasa, zbog čega je u ovom scenariju informativnija od točnosti ili F1-mjere. Uz nju se izvještava pet pomoćnih mjera na binarnim predikcijama dobivenim MAD pragom: točnost, preciznost, odziv, F1-mjera i koeficijent determinacije $R^2$. Dodatno se prati i ``implied contamination'' --- udio transakcija koje je model označio kao anomalije --- kao dijagnostika preflagiranja u odnosu na stvarnu stopu prijevara od 0,17\%. Radi ponovljivosti svi eksperimenti koriste fiksno nasumično sjeme \texttt{RANDOM\_STATE${=}42$}.
+
 \section{\textbf{REZULTATI I RASPRAVA}}
-% TASK 7 (tables + figures) and TASK 8 (discussion)
+
+\begin{table*}[t]
+\caption{Mjere na zajedničkom poduzorku od 80\,000 redaka (127 prijevara). Prvih šest su nenadzirani; Logistička regresija je nadzirani baseline na 30\% skupu.}
+\label{tab:main80k}
+\centering
+\begin{tabular}{@{}lrrrrrrr@{}}
+\toprule
+Model & Točnost & Preciznost & Odziv & F1 & ROC-AUC & R$^2$ & Impl.\ kontam. \\
+\midrule
+One-Class SVM         & 99,29\% & 10,14\% & 44,09\% & \textbf{16,49\%} & \textbf{0,9635} & $-3{,}47$  & 0,69\% \\
+One-Class SVM (SGD)   & 99,35\% & 0,00\%  & 0,00\%  & 0,00\%  & 0,0504 & $-3{,}11$   & 0,49\% \\
+Isolation Forest      & 95,60\% & 2,97\%  & 84,25\% & 5,73\%  & 0,9612 & $-26{,}75$  & 4,51\% \\
+Local Outlier Factor  & 92,77\% & 0,44\%  & 19,69\% & 0,86\%  & 0,5481 & $-44{,}63$  & 7,14\% \\
+Robust Covariance     & 61,08\% & 0,38\%  & 92,91\% & 0,75\%  & 0,8882 & $-244{,}53$ & 39,05\% \\
+Autoencoder (GPU)     & 92,55\% & 1,82\%  & 86,61\% & 3,56\%  & 0,9523 & $-46{,}01$  & 7,57\% \\
+Logistic Regression   & 97,30\% & 5,15\%  & 92,11\% & 9,76\%  & 0,9606 & $-16{,}05$  & 2,83\% \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+\subsection{Mjere na poduzorku od 80k}
+
+Tablica~\ref{tab:main80k} prikazuje sve mjere na reprezentativnom poduzorku od 80\,000 transakcija. Po primarnoj mjeri ROC-AUC najbolji su One-Class SVM (0,9635) i Isolation Forest (0,9612), neposredno praćeni nadziranim baselineom Logističke regresije (0,9606) i Autoencoderom (0,9523). Visoke vrijednosti točnosti (npr.\ 99,29\%) posljedica su ekstremne neravnoteže, a ne kvalitete detekcije, i zato ih ne treba interpretirati kao pokazatelj uspjeha. Slika~\ref{fig:bars} sažima isti skup mjera grafički.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{../results/80k/metrics_bar.png}
+\caption{Pregled mjera na poduzorku od 80k za svih sedam modela.}
+\label{fig:bars}
+\end{figure}
+
+\subsection{Stabilnost po veličini uzorka}
+
+Tablice~\ref{tab:auc} i \ref{tab:f1} prate ROC-AUC i F1-mjeru kroz sve četiri veličine poduzorka, a Slika~\ref{fig:auc} prikazuje ROC-AUC grafički. Isolation Forest i One-Class SVM ostaju u uskom pojasu od 0,94 do 0,98 kroz sve veličine, dok Autoencoder zadržava stabilnih 0,93--0,97. Logistička regresija, kao nadzirani model, s porastom podataka čak i napreduje (do 0,9803 pri 150k). Nasuprot tome, Local Outlier Factor pada s 0,7696 prema nasumičnoj razini ($\approx 0,51$), a One-Class SVM (SGD) ostaje invertiran (ROC-AUC ispod 0,5).
+
+\begin{table}[t]
+\caption{ROC-AUC po veličini uzorka (neovisno o pragu).}
+\label{tab:auc}
+\centering
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+Model & 30k & 80k & 150k & 230k \\
+\midrule
+Isolation Forest      & \textbf{0,9809} & 0,9612 & 0,9489 & 0,9467 \\
+One-Class SVM         & 0,9796 & 0,9635 & 0,9470 & 0,9430 \\
+Autoencoder (GPU)     & 0,9718 & 0,9523 & 0,9325 & 0,9432 \\
+Logistic Regression   & 0,9208 & 0,9606 & 0,9803 & 0,9770 \\
+Robust Covariance     & 0,9389 & 0,8882 & 0,9250 & 0,9191 \\
+Local Outlier Factor  & 0,7696 & 0,5481 & 0,5052 & 0,5099 \\
+One-Class SVM (SGD)   & 0,0185 & 0,0504 & 0,1389 & 0,3668 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[t]
+\caption{F1 po veličini uzorka (MAD prag preflagira pa su vrijednosti niske).}
+\label{tab:f1}
+\centering
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+Model & 30k & 80k & 150k & 230k \\
+\midrule
+One-Class SVM         & 0,00\%  & 16,49\% & 15,94\% & 15,26\% \\
+Logistic Regression   & 15,49\% & 9,76\%  & 8,60\%  & 9,80\% \\
+Isolation Forest      & 5,10\%  & 5,73\%  & 5,89\%  & 5,47\% \\
+Autoencoder (GPU)     & 5,20\%  & 3,56\%  & 2,57\%  & 3,23\% \\
+One-Class SVM (SGD)   & 0,00\%  & 0,00\%  & 1,22\%  & 7,28\% \\
+Local Outlier Factor  & 1,28\%  & 0,86\%  & 0,68\%  & 0,64\% \\
+Robust Covariance     & 0,71\%  & 0,75\%  & 0,75\%  & 0,72\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{../results/comparison/rocauc_vs_size.png}
+\caption{ROC-AUC u ovisnosti o veličini uzorka. Isolation Forest i One-Class SVM ostaju u pojasu 0,94--0,98; LOF pada k nasumičnom, SGD-OCSVM je invertiran.}
+\label{fig:auc}
+\end{figure}
+
+\subsection{Skalabilnost}
+
+Tablica~\ref{tab:runtime} i Slika~\ref{fig:runtime} prikazuju ukupno vrijeme izvođenja. One-Class SVM s jezgrom RBF raste približno kvadratno --- s 13,5 s na 30k na čak 1124,7 s (gotovo 19 minuta) na 230k --- dok Isolation Forest ostaje gotovo ravan (0,24--2,18 s). To znači da veći poduzorak kupuje One-Class SVM-u vrijeme, ali ne i kvalitetu rangiranja. Autoencoder je jedini model treniran na GPU-u, pa njegovo trajanje nije izravno usporedivo s ostalima izvođenima na CPU-u; ROC-AUC ipak ostaje pošten zajednički nazivnik.
+
+\begin{table}[t]
+\caption{Ukupno vrijeme izvođenja (s) po veličini uzorka.}
+\label{tab:runtime}
+\centering
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+Model & 30k & 80k & 150k & 230k \\
+\midrule
+One-Class SVM (SGD)   & 0,02  & 0,10   & 0,18   & 0,46 \\
+Logistic Regression   & 0,06  & 0,22   & 0,34   & 0,67 \\
+Isolation Forest      & 0,24  & 0,65   & 1,20   & 2,18 \\
+Autoencoder (GPU)     & 1,94  & 2,71   & 5,43   & 7,80 \\
+Robust Covariance     & 2,43  & 7,99   & 16,06  & 31,03 \\
+Local Outlier Factor  & 3,36  & 6,98   & 24,70  & 63,47 \\
+One-Class SVM         & 13,46 & 138,78 & 458,69 & \textbf{1124,67} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{../results/comparison/runtime_vs_size.png}
+\caption{Ukupno vrijeme izvođenja (logaritamska skala). One-Class SVM raste $\approx O(n^2)$, dok Isolation Forest ostaje gotovo ravan.}
+\label{fig:runtime}
+\end{figure}
+
+\subsection{Rasprava}
+
+\textbf{Jaz između rangiranja i pragovanja.} Ključni nalaz rada jest izrazit raskorak između sposobnosti rangiranja i kvalitete binarne odluke. Iako One-Class SVM, Isolation Forest i Autoencoder postižu visok ROC-AUC, njihove F1-mjere u Tablici~\ref{tab:f1} ostaju niske (ispod 17\%) jer label-free MAD prag preflagira u odnosu na stvarnu stopu prijevara od 0,17\%. Posljedično je koeficijent $R^2$ izrazito negativan za sve modele i ne razlikuje dobre od loših rangera --- upravo zato je ROC-AUC, koja ne ovisi o pragu, jedina mjera koja vjerno odražava kvalitetu modela u ovom scenariju.
+
+\textbf{Robust Covariance.} Elliptic Envelope je solidan ranker (ROC-AUC $\approx 0,89$--$0,94$), no MAD prag mu označava gotovo 40\% transakcija kao anomalije (stupac impl.\ kontam.\ u Tablici~\ref{tab:main80k}), zbog čega F1 pada na $\approx 0$, a $R^2$ na $\approx -245$. Ovaj model najjasnije ilustrira opisani jaz: dobar poredak uz potpuno neupotrebljiv prag.
+
+\textbf{Razlozi neuspjeha.} Local Outlier Factor kolabira s porastom dimenzionalnosti i veličine (0,77 $\rightarrow$ $\approx 0,51$), što je očekivano jer pojam lokalne gustoće gubi smisao u 30-dimenzijskom prostoru. One-Class SVM (SGD) daje invertirani ranking (ROC-AUC ispod 0,5), što upućuje na patologiju optimizacije linearne SGD aproksimacije, a ne na svojstvo podataka.
+
+\textbf{Usporedba s referentnim radom.} Tablica~\ref{tab:agyemang} uspoređuje F1-mjeru za izdvojene točke iz simulacijske studije Agyemanga \cite{agyemang} (220 točaka, 2-D, $\approx$10\% outliera) s rezultatima ovoga rada (poduzorak 80k, 30-D, 0,17\%). F1 očekivano znatno pada prelaskom na realne visoko-dimenzijske i ekstremno neuravnotežene podatke, dok LOF i SGD-OCSVM podbacuju u obje studije. Time ovaj rad izravno odgovara na otvoreno pitanje referentnog rada o valjanosti zaključaka na stvarnim podacima: poredak najboljih detektora ostaje robustan, ali bezznačajno pragovanje postaje dominantan praktični problem.
+
+\begin{table}[t]
+\caption{Usporedba F1 za izdvojene točke: referentni rad (220 točaka, 2-D) naspram ovog rada (80k poduzorak, 30-D).}
+\label{tab:agyemang}
+\centering
+\begin{tabular}{@{}lrr@{}}
+\toprule
+Model & Agyemang \cite{agyemang} & Ovaj rad \\
+\midrule
+One-Class SVM        & 66,67\% & 16,49\% \\
+One-Class SVM (SGD)  & 9,52\%  & 0,00\% \\
+Isolation Forest     & 64,41\% & 5,73\% \\
+Local Outlier Factor & 9,52\%  & 0,86\% \\
+Robust Covariance    & 66,67\% & 0,75\% \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \section{\textbf{ZAKLJUČAK}}
-% TASK 9
+
+Ovaj rad primijenio je šest nenadziranih detektora anomalija i nadzirani baseline na velik, stvaran i ekstremno neuravnotežen skup transakcija kreditnim karticama, s ciljem provjere zaključaka simulacijske studije Agyemanga \cite{agyemang} u realnom scenariju. Glavni nalaz jest da, mjereno ROC-AUC-om neovisnim o pragu, Isolation Forest i One-Class SVM ostvaruju izvrsno i stabilno rangiranje prijevarnih transakcija (0,94--0,98) kroz sve veličine uzorka, pri čemu Isolation Forest nudi daleko najbolji omjer kvalitete i brzine jer mu vrijeme izvođenja raste gotovo linearno, dok One-Class SVM raste kvadratno.
+
+Istodobno se pokazalo da label-free detekcija ima ozbiljno ograničenje: MAD prag sustavno preflagira u odnosu na stvarnu stopu prijevara, zbog čega F1-mjere ostaju niske, a koeficijent $R^2$ izrazito negativan i nediskriminativan među modelima. Sporedna ograničenja uključuju varijancu uvedenu poduzorkovanjem te degeneraciju SGD aproksimacije One-Class SVM-a u invertirani ranking. Najvažniji smjer budućeg rada stoga je kalibracija praga bez oznaka, koja ostaje otvoren problem ključan za prijelaz od kvalitetnog rangiranja k upotrebljivoj binarnoj odluci u praksi.
 
 \begin{thebibliography}{99}
 \bibitem{agyemang} E. F. Agyemang, ``Anomaly detection using unsupervised machine learning algorithms: A simulation study,'' \emph{Scientific African}, vol.~26, e02386, 2024.
