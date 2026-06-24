@@ -78,15 +78,26 @@ Key findings:
 Following the reference paper, detection is **fully unsupervised** — no labels
 are used for training and there is **no train/test split**. Every model is fit
 and scored on the same unlabeled feature matrix; `Class` is used **only** for
-the final evaluation.
+the final evaluation. The anomaly budget is now **label-free as well**: each
+model is thresholded by a per-model robust cutoff on its own scores (see below),
+so the true fraud rate never enters the detection pipeline — only the reporting.
 
 ### Common Subsample (fair comparison)
 
 One-Class SVM, LOF and Elliptic Envelope scale poorly to ~285K rows. To compare
 all five algorithms **fairly**, every model is fit and scored on the *same*
 random subsample of **80,000 rows**, keeping the natural ~0.17% imbalance
-(127 frauds). `contamination` / `nu` is set to the observed fraud fraction of
-the subsample (≈0.159%), so every model targets the same anomaly budget.
+(127 frauds).
+
+Each model produces a **continuous anomaly score**, and anomalies are flagged by
+a per-model **robust MAD cutoff** — a modified z-score on that model's own scores
+with `MAD_K = 3.0`. One-Class SVM uses a fixed `nu = 0.05`. Crucially, the
+budget is **data-driven and label-free**: the true fraud fraction is no longer
+used to size it, so the models **no longer share a common anomaly budget** — each
+flags as many points as its own score distribution warrants. The downside is
+visible in the results: the MAD cutoff overshoots the true ~0.17% base rate (the
+*implied contamination* column), so thresholded precision/F1 stay low. This is
+why **ROC-AUC**, which is threshold-independent, becomes the primary metric.
 
 ### Algorithms
 
@@ -102,39 +113,45 @@ All five trained and scored on the identical 80,000-row subsample.
 
 ### Results
 
-| Model | Accuracy | Precision | Recall | F1 Score |
-|-------|----------|-----------|--------|----------|
-| One-Class SVM | 96.34% | 2.22% | 51.18% | 4.25% |
-| One-Class SVM (SGD) | 99.84% | 0.00% | 0.00% | 0.00% |
-| **Isolation Forest** | **99.79%** | **33.86%** | **33.86%** | **33.86%** |
-| Local Outlier Factor | 99.68% | 0.00% | 0.00% | 0.00% |
-| Robust Covariance | 99.73% | 15.75% | 15.75% | 15.75% |
+| Model | Accuracy | Precision | Recall | F1 Score | ROC-AUC | R² | Implied Contam. |
+|-------|----------|-----------|--------|----------|---------|-----|-----------------|
+| **One-Class SVM** | 99.29% | 10.14% | 44.09% | **16.49%** | **0.9635** | -3.47 | 0.69% |
+| One-Class SVM (SGD) | 99.35% | 0.00% | 0.00% | 0.00% | 0.0504 | -3.11 | 0.49% |
+| Isolation Forest | 95.60% | 2.97% | 84.25% | 5.73% | 0.9612 | -26.75 | 4.51% |
+| Local Outlier Factor | 92.77% | 0.44% | 19.69% | 0.86% | 0.5481 | -44.63 | 7.14% |
+| Robust Covariance | 61.08% | 0.38% | 92.91% | 0.75% | 0.8882 | -244.53 | 39.05% |
 
-**Winner: Isolation Forest** with the best F1 score (33.86%).
+**Best ROC-AUC: One-Class SVM (0.9635)**, with Isolation Forest essentially tied
+(0.9612) and far more stable across sizes (see the sweep). On the **threshold-
+independent** ROC-AUC both rank fraud excellently; the data-driven MAD cutoff
+over-flags (implied contamination 0.7–4.5% vs the true ~0.17%), which is why the
+thresholded F1 scores stay low for everyone. Best F1 at 80k is One-Class SVM
+(16.49%), but F1 here is dominated by the threshold, not the ranking quality.
 
 ### Analysis
 
-- **Isolation Forest (best)** — best F1 by a clear margin and effectively instant. Random-partition isolation handles the high-dimensional PCA space well even without labels.
-- **Robust Covariance (moderate)** — caught a fair share of fraud; the Gaussian-ellipse assumption partly holds after scaling.
-- **One-Class SVM (high recall, near-zero precision)** — recall ~51% but it flagged 2,931 points out of 80,000 (only 127 are fraud), so precision collapses to ~2%. Far too many false alarms.
-- **One-Class SVM (SGD) — failed** — predicted zero anomalies. This is an optimization/scaling sensitivity of the linear SGD solver, not a real ranking of the method.
-- **Local Outlier Factor — collapsed** — at this contamination budget LOF's flagged points missed the fraud entirely (F1 0%). Sensitive to `n_neighbors` and the global contamination on this data.
+- **Isolation Forest (excellent, stable ranker)** — ROC-AUC 0.9612, recall 84% of frauds. It ranks fraud almost perfectly; the MAD cutoff just flags 4.5% of points (vs the 0.17% base rate), so thresholded precision (3%) and F1 (5.7%) are low. The ranking is the strength, not the threshold.
+- **One-Class SVM (best ROC-AUC)** — ROC-AUC 0.9635, the top ranker here. With `nu=0.05` its implied contamination is a modest 0.69%, giving it the highest thresholded F1 (16.5%) too — but that is the closest threshold-to-base-rate match, not better separation than Isolation Forest.
+- **Robust Covariance (good ranker, heavy over-flagging)** — ROC-AUC 0.8882 and recall 93%, but its MAD cutoff flags ~39% of all points, so precision is 0.38% and R² craters to ≈ -245. A good ranker wrecked by an over-eager threshold.
+- **Local Outlier Factor (collapsing)** — ROC-AUC just 0.5481, barely above random at 80k. Its local-density signal does not separate fraud at this scale, and the picture worsens with size (see the sweep).
+- **One-Class SVM (SGD) — inverted** — ROC-AUC 0.0504, *below* 0.5, i.e. worse than random: the linear SGD solver learns a near-inverted score, a genuine optimisation pathology rather than a data-volume issue.
 
-Models 3–5 flag *exactly* 127 points — the `contamination` budget at work — so for them precision = recall = F1.
+R² is strongly negative for every model — binary predictions over-flag relative to the 0.17% base rate — and is most extreme for Robust Covariance (≈ -245). It confirms the over-flagging story but does not discriminate between the good and bad rankers; that job belongs to ROC-AUC.
 
 ### Computational Efficiency
 
 | Model | Fit Time (s) | Predict Time (s) | Total (s) |
 |-------|-------------|------------------|-----------|
-| One-Class SVM | 47.09 | 12.28 | 59.38 |
-| One-Class SVM (SGD) | 0.09 | 0.01 | 0.10 |
-| Isolation Forest | 0.32 | 0.21 | 0.53 |
-| Local Outlier Factor | 4.64 | 0.00 | 4.64 |
-| Robust Covariance | 7.11 | 0.02 | 7.13 |
+| One-Class SVM | 62.36 | 30.69 | 93.04 |
+| One-Class SVM (SGD) | 0.05 | 0.02 | 0.06 |
+| Isolation Forest | 0.18 | 0.29 | 0.46 |
+| Local Outlier Factor | 5.22 | 0.00 | 5.22 |
+| Robust Covariance | 6.24 | 0.03 | 6.28 |
 
-One-Class SVM (RBF) is by far the slowest (~O(n²)). Isolation Forest is both the
-most accurate **and** the fastest with a real `predict`. LOF fits and predicts in
-one `fit_predict` step, so its predict time is reported as 0.
+One-Class SVM (RBF) is by far the slowest (~O(n²)) — and with `nu=0.05` it is now
+markedly slower than before (93 s at 80k). Isolation Forest is the strongest
+ranker **and** the fastest with a real `predict`. LOF fits and predicts in one
+`fit_predict` step, so its predict time is reported as 0.
 
 **Plots generated:**
 1. Performance metrics bar chart (accuracy, precision, recall, F1)
@@ -145,10 +162,17 @@ one `fit_predict` step, so its predict time is reported as 0.
 
 - Metrics come from an 80,000-row subsample (~127 frauds), so precision/recall
   still carry variance — raise `SAMPLE_SIZE` in the notebook to stabilize them.
-- `contamination` is a fixed threshold equal to the true fraud rate, not tuned
-  per model.
-- `SGDOneClassSVM` can collapse to a degenerate all-normal solution; reported
-  with that caveat rather than as a method ranking.
+- The anomaly budget is now **data-driven and label-free** (per-model MAD cutoff,
+  `MAD_K = 3.0`), so detection no longer depends on the true fraud rate. The
+  cutoff has its own knob, though: `MAD_K` trades recall against false alarms, and
+  on skewed score distributions (notably Robust Covariance) the MAD cutoff
+  **over-flags** badly — far above the 0.17% base rate.
+- Thresholded precision/F1 are therefore low for everyone; read **ROC-AUC** as the
+  threshold-independent measure of how well each model ranks fraud.
+- R² is dominated by this over-flagging (it is strongly negative for every model)
+  and so is not a useful discriminator between the methods here.
+- `SGDOneClassSVM` can collapse to a degenerate or inverted solution (ROC-AUC
+  below 0.5); reported with that caveat rather than as a method ranking.
 
 ---
 
@@ -159,50 +183,66 @@ reruns the **exact same pipeline** as notebook 02 at four sizes — 30k, 80k, 15
 and 230k rows — and writes tables + plots to `results/<size>/` and cross-size
 plots to `results/comparison/`.
 
-### F1 Score by sample size
+### ROC-AUC by sample size
+
+Threshold-independent — the most informative table, since it measures ranking
+quality directly rather than how well the MAD cutoff happens to match the base rate.
 
 | Model | 30k | 80k | 150k | 230k |
 |---|---|---|---|---|
-| **Isolation Forest** | **31.91%** | **33.86%** | **30.31%** | **28.39%** |
-| Robust Covariance | 0.00% | 15.75% | 0.39% | 0.51% |
-| One-Class SVM | 3.10% | 4.25% | 5.90% | 7.09% |
-| Local Outlier Factor | 2.13% | 0.00% | 0.00% | 0.00% |
-| One-Class SVM (SGD) | 0.00% | 0.00% | 0.00% | 0.00% |
+| **Isolation Forest** | **0.9809** | **0.9612** | **0.9489** | **0.9467** |
+| One-Class SVM | 0.9796 | 0.9635 | 0.9470 | 0.9430 |
+| Robust Covariance | 0.9389 | 0.8882 | 0.9250 | 0.9191 |
+| Local Outlier Factor | 0.7696 | 0.5481 | 0.5052 | 0.5099 |
+| One-Class SVM (SGD) | 0.0185 | 0.0504 | 0.1389 | 0.3668 |
+
+### F1 Score by sample size
+
+Thresholded by the per-model MAD cutoff — low for everyone because the cutoff
+over-flags relative to the 0.17% base rate.
+
+| Model | 30k | 80k | 150k | 230k |
+|---|---|---|---|---|
+| One-Class SVM | 0.00% | 16.49% | 15.94% | 15.26% |
+| Isolation Forest | 5.10% | 5.73% | 5.89% | 5.47% |
+| One-Class SVM (SGD) | 0.00% | 0.00% | 1.22% | 7.28% |
+| Local Outlier Factor | 1.28% | 0.86% | 0.68% | 0.64% |
+| Robust Covariance | 0.71% | 0.75% | 0.75% | 0.72% |
 
 ### Total runtime (seconds) by sample size
 
 | Model | 30k | 80k | 150k | 230k |
 |---|---|---|---|---|
-| Isolation Forest | 0.25 | 0.57 | 0.95 | 1.43 |
-| One-Class SVM (SGD) | 0.02 | 0.11 | 0.21 | 0.34 |
-| Robust Covariance | 2.60 | 8.58 | 14.17 | 19.90 |
-| Local Outlier Factor | 0.69 | 4.81 | 17.88 | 52.25 |
-| One-Class SVM | 5.81 | 52.85 | 136.66 | **357.04** |
+| Isolation Forest | 0.29 | 0.46 | 0.88 | 1.20 |
+| One-Class SVM (SGD) | 0.02 | 0.06 | 0.14 | 0.24 |
+| Robust Covariance | 2.63 | 6.28 | 12.12 | 20.46 |
+| Local Outlier Factor | 3.43 | 5.22 | 17.90 | 43.26 |
+| One-Class SVM | 13.85 | 93.04 | 324.66 | **717.48** |
 
 ### What the sweep shows
 
-- **Isolation Forest is the only stable model** — F1 stays in the 28–34% band
-  across all four sizes; it is also by far the fastest (1.4 s at 230k). The
-  slight decline with size is consistent with a global `contamination` budget
-  becoming harder to satisfy as the fraud count grows.
-- **One-Class SVM scales exactly quadratically** — 5.8 → 53 → 137 → 357 s for
-  7.7× more data is ~61× more time, an empirical exponent ≈ **2.0**, matching
-  the kernel-matrix complexity. Its recall stays around 49–51% but precision
-  stays ~2–4%, so more data buys runtime, not quality.
-- **LOF degrades even faster** (BallTree losing to brute-force in 30-D) — 0.7 s
-  at 30k to 52 s at 230k — and F1 is 0 at every size ≥ 80k.
-- **Robust Covariance is unstable** across sizes (16% at 80k, ~0% elsewhere) —
-  its 80k win in notebook 02 is partly luck of the subsample. The sweep makes
-  that visible, where a single-size run would hide it.
-- **SGD One-Class SVM** predicts zero anomalies at every size — confirms it's an
-  optimization pathology, not a data-volume problem.
+- **Isolation Forest and One-Class SVM are strong, stable rankers** — both hold
+  ROC-AUC in the 0.94–0.98 band across all four sizes. They genuinely separate
+  fraud; the fixed MAD cutoff, not the ranking, is what caps their F1.
+- **Robust Covariance is a good ranker too** — ROC-AUC ~0.89–0.94 — but its MAD
+  cutoff flags ~40% of points at every size, so precision and F1 stay near zero.
+- **LOF collapses to random** — ROC-AUC falls from 0.77 at 30k to ~0.51 at 80k
+  and beyond (≈ a coin flip). Its local-density signal simply does not survive the
+  jump to 30-D real data at scale.
+- **SGD One-Class SVM is inverted** — ROC-AUC 0.02–0.37, *below* 0.5 at every
+  size, i.e. consistently worse than random. This is an optimisation pathology of
+  the linear SGD solver, not a data-volume problem.
+- **Runtime: OCSVM is now both quadratic *and* slower** — with `nu=0.05` it runs
+  13.8 → 93 → 325 → 717 s for 30k → 230k (an empirical exponent ≈ 2.0, matching
+  kernel-matrix complexity). Isolation Forest stays effectively flat (0.3 s →
+  1.2 s), so more data buys OCSVM runtime, not ranking quality.
 
-Cross-size plots (`results/comparison/f1_vs_size.png`,
+Cross-size plots (`results/comparison/rocauc_vs_size.png`, `f1_vs_size.png`,
 `runtime_vs_size.png`) summarise this in one glance — `runtime_vs_size.png`
 uses a log scale so the OCSVM / LOF curves are visible next to Isolation
 Forest's near-flat line.
 
-To regenerate everything (≈10 min, dominated by OCSVM at 230k):
+To regenerate everything (≈20 min, dominated by OCSVM at 230k):
 
 ```bash
 cd detekcija-anomalija/src
@@ -224,35 +264,40 @@ exactly the future work the paper recommends in its Conclusion and Limitations.
 | **Outliers** | 20 (~10%) | 492 (~0.17%) |
 | **Imbalance** | Mild | Extreme (~1:580) |
 | **Training data** | Fit on **normals only** | Fully **unsupervised** on the unlabeled mix |
-| **Contamination** | Fixed at 0.1 | Observed fraud rate (~0.17%) |
-| **Evaluation** | One small run | 80k common subsample + 4-size sweep (30k → 230k) |
+| **Contamination** | Fixed at 0.1 | Data-driven, label-free per-model MAD cutoff (`MAD_K=3.0`) |
+| **Evaluation** | One small run | 80k common subsample + 4-size sweep (30k → 230k), ROC-AUC + F1 + R² |
 
 **Results comparison (F1 score for outliers):**
 
 | Model | Paper (220 pts, 2-D) | This project (80k subsample, 30-D) |
 |---|---|---|
-| One-Class SVM | 66.67% | 4.25% |
+| **One-Class SVM** | 66.67% | **16.49%** |
 | One-Class SVM (SGD) | 9.52% | 0.00% |
-| **Isolation Forest** | **64.41%** | **33.86%** |
-| Local Outlier Factor | 9.52% | 0.00% |
-| Robust Covariance | 66.67% | 15.75% |
+| Isolation Forest | 64.41% | 5.73% |
+| Local Outlier Factor | 9.52% | 0.86% |
+| Robust Covariance | 66.67% | 0.75% |
 
 **Key observations:**
 
-- **Isolation Forest reproduces as the most balanced model** in both studies — and
-  is the only one whose ranking is *stable* across our 30k–230k sweep.
+- **Thresholded F1 is far lower across the board** than in the paper — but that is
+  the cost of a data-driven, label-free MAD cutoff over-flagging against a 0.17%
+  base rate, not a failure of the models to *rank* fraud. The new **ROC-AUC**
+  metric makes this explicit: Isolation Forest (0.9612) and One-Class SVM (0.9635)
+  separate fraud strongly at 80k even though their thresholded F1 is in single
+  digits. The bottleneck is the threshold, not the ranking.
 - **LOF and SGD-OCSVM fail in both studies** — the paper's hand-picked toy
-  setting was the optimistic case, and even there they collapsed. The pathology
-  is intrinsic to the methods at the chosen hyperparameters, not a data issue.
-- **F1 drops from ~65% → ~34% for Isolation Forest** moving from the paper's
-  setting to ours. That gap is the cost of going from 220 well-separated 2-D
-  points with 10% outliers to 30-D real transactions at 0.17% imbalance — and
-  it directly answers the paper's open question about *"the application of these
-  models to real-world datasets to validate their efficacy in practical anomaly
-  detection scenarios"*.
+  setting was the optimistic case, and even there they collapsed. Here LOF's
+  ROC-AUC falls to ~0.55 (near random) and SGD-OCSVM's to ~0.05 (inverted), so the
+  pathology is intrinsic to the methods at these hyperparameters, not a data issue.
+- **F1 drops sharply moving from the paper's setting to ours** — the cost of going
+  from 220 well-separated 2-D points with 10% outliers to 30-D real transactions
+  at 0.17% imbalance. This directly answers the paper's open question about *"the
+  application of these models to real-world datasets to validate their efficacy in
+  practical anomaly detection scenarios"*.
 - **Our sample-size sweep extends the paper's scalability discussion** with
-  empirical numbers: OCSVM's runtime exponent ≈ 2.0 (clean quadratic), while
-  Isolation Forest stays effectively flat (0.25 s → 1.4 s for 30k → 230k).
+  empirical numbers: OCSVM's runtime exponent ≈ 2.0 (clean quadratic, now slower
+  at `nu=0.05`), while Isolation Forest stays effectively flat (0.3 s → 1.2 s for
+  30k → 230k) and its ROC-AUC stays in the 0.95–0.98 band throughout.
 
 In short: this project is not a re-implementation of the paper — it is the
 **validation on real, imbalanced, high-dimensional data** that the paper itself
@@ -262,14 +307,22 @@ identifies as missing.
 
 ## Key Takeaway
 
-The reference paper found **Isolation Forest** performed best, and our
-fully-unsupervised, equal-sample comparison on real-world data reproduces that
-result — Isolation Forest wins on both F1 and runtime. The sample-size sweep
-strengthens this: Isolation Forest is the **only model whose F1 is stable
-across 30k–230k rows**, while every other algorithm either degrades, blows up
-in runtime, or both. Unsupervised detection on this extremely imbalanced data
-is genuinely hard (best F1 ≈ 28–34%), which itself is a key finding for the
-report.
+Detection here is now **fully label-free**: each model is thresholded by a
+data-driven MAD cutoff on its own anomaly scores (`MAD_K=3.0`), so the true fraud
+rate never touches the pipeline. Judged by the **threshold-independent ROC-AUC**,
+**Isolation Forest (0.95–0.98) and One-Class SVM (0.94–0.98) are excellent and
+stable rankers of fraud across 30k–230k rows** — Isolation Forest with the added
+advantage of being orders of magnitude faster (≈1.2 s at 230k vs ≈717 s for
+OCSVM). Robust Covariance ranks well too (~0.89–0.94) but over-flags; LOF
+collapses to ~random and SGD-OCSVM is inverted.
+
+The deeper finding is the **gap between ranking and thresholding**: the strong
+models clearly *can* separate fraud (high ROC-AUC), yet their thresholded F1 stays
+in single-to-low-double digits because the label-free MAD cutoff over-flags
+relative to the 0.17% base rate (and R² is correspondingly very negative).
+Unsupervised fraud detection on this extremely imbalanced data is genuinely hard —
+not because the models cannot rank the anomalies, but because choosing the right
+operating threshold without labels remains the open problem.
 
 ---
 
@@ -277,7 +330,7 @@ report.
 
 ```bash
 # Install dependencies
-pip install pandas numpy scikit-learn matplotlib seaborn jupyter
+pip install pandas numpy scikit-learn matplotlib seaborn jupyter tabulate
 
 # Start Jupyter
 cd detekcija-anomalija/src
@@ -299,6 +352,7 @@ Run notebooks in order (from `src/`):
 - matplotlib
 - seaborn
 - jupyter
+- tabulate (for the cross-size markdown summary)
 
 ---
 
