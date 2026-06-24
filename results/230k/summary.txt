@@ -2,7 +2,7 @@ Sample size: 230,000 rows
 Frauds: 391
 True fraud rate (reference only): 0.1700%
 Best F1: One-Class SVM (15.26%)
-Best ROC-AUC: Isolation Forest (0.9467)
+Best ROC-AUC: Logistic Regression (0.9770)
 
                      Accuracy Precision  ...         R2 Implied Contam.
 Model                                    ...                           
@@ -11,12 +11,19 @@ One-Class SVM (SGD)   99.67 %    6.93 %  ...    -0.9573          0.19 %
 Isolation Forest      95.06 %    2.83 %  ...   -28.1339          5.06 %
 Local Outlier Factor  92.14 %    0.33 %  ...   -45.2884          7.74 %
 Robust Covariance     57.25 %    0.36 %  ...  -250.9039         42.89 %
+Autoencoder (GPU)     91.47 %    1.65 %  ...   -49.2465          8.64 %
+Logistic Regression    97.2 %    5.18 %  ...   -15.5494          2.94 %
 
-[5 rows x 7 columns]
+[7 rows x 7 columns]
 
                       Fit Time (s)  Predict Time (s)  Total (s)
-One-Class SVM              508.415           209.064    717.478
-One-Class SVM (SGD)          0.222             0.016      0.238
-Isolation Forest             0.301             0.902      1.203
-Local Outlier Factor        43.256             0.000     43.256
-Robust Covariance           20.379             0.078     20.457
+One-Class SVM              594.275           299.343    893.618
+One-Class SVM (SGD)          0.260             0.024      0.284
+Isolation Forest             0.422             1.246      1.668
+Local Outlier Factor        57.150             0.001     57.151
+Robust Covariance           24.209             0.103     24.312
+Autoencoder (GPU)            6.741             0.077      6.817
+Logistic Regression          0.552             0.021      0.574
+
+Note: Logistic Regression is a supervised baseline (trained on 70 %, evaluated on 30 % stratified hold-out).
+All other models are unsupervised (scored on the full sample).

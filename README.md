@@ -108,8 +108,9 @@ why **ROC-AUC**, which is threshold-independent, becomes the primary metric.
 | 3 | **Isolation Forest** | Random trees — anomalies need fewer splits to isolate |
 | 4 | **Local Outlier Factor** | Compares local density of a point to its neighbors (`novelty=False`, `fit_predict`) |
 | 5 | **Robust Covariance** | Fits a Gaussian ellipse — points outside = anomalies |
+| 6 | **Autoencoder (GPU)** | Neural net trained to reconstruct the data; reconstruction error = anomaly score. The only model trained on the GPU (PyTorch). |
 
-All five trained and scored on the identical 80,000-row subsample.
+All six trained and scored on the identical 80,000-row subsample.
 
 ### Results
 
@@ -120,6 +121,7 @@ All five trained and scored on the identical 80,000-row subsample.
 | Isolation Forest | 95.60% | 2.97% | 84.25% | 5.73% | 0.9612 | -26.75 | 4.51% |
 | Local Outlier Factor | 92.77% | 0.44% | 19.69% | 0.86% | 0.5481 | -44.63 | 7.14% |
 | Robust Covariance | 61.08% | 0.38% | 92.91% | 0.75% | 0.8882 | -244.53 | 39.05% |
+| Autoencoder (GPU) | 92.55% | 1.82% | 86.61% | 3.56% | 0.9523 | -46.01 | 7.57% |
 
 **Best ROC-AUC: One-Class SVM (0.9635)**, with Isolation Forest essentially tied
 (0.9612) and far more stable across sizes (see the sweep). On the **threshold-
@@ -135,6 +137,7 @@ thresholded F1 scores stay low for everyone. Best F1 at 80k is One-Class SVM
 - **Robust Covariance (good ranker, heavy over-flagging)** — ROC-AUC 0.8882 and recall 93%, but its MAD cutoff flags ~39% of all points, so precision is 0.38% and R² craters to ≈ -245. A good ranker wrecked by an over-eager threshold.
 - **Local Outlier Factor (collapsing)** — ROC-AUC just 0.5481, barely above random at 80k. Its local-density signal does not separate fraud at this scale, and the picture worsens with size (see the sweep).
 - **One-Class SVM (SGD) — inverted** — ROC-AUC 0.0504, *below* 0.5, i.e. worse than random: the linear SGD solver learns a near-inverted score, a genuine optimisation pathology rather than a data-volume issue.
+- **Autoencoder (GPU) — strong, stable unsupervised ranker** — ROC-AUC 0.9523 and recall 87% at 80k. Across all four sizes its ROC-AUC stays in the 0.93–0.97 band (high recall 84–89%), GPU-fast at 2.6–6.8 s. Its MAD cutoff over-flags at 7.6% implied contamination, so thresholded F1 (3.6%) stays low — the same threshold story that caps every other ranker here.
 
 R² is strongly negative for every model — binary predictions over-flag relative to the 0.17% base rate — and is most extreme for Robust Covariance (≈ -245). It confirms the over-flagging story but does not discriminate between the good and bad rankers; that job belongs to ROC-AUC.
 
@@ -142,20 +145,23 @@ R² is strongly negative for every model — binary predictions over-flag relati
 
 | Model | Fit Time (s) | Predict Time (s) | Total (s) |
 |-------|-------------|------------------|-----------|
-| One-Class SVM | 62.36 | 30.69 | 93.04 |
-| One-Class SVM (SGD) | 0.05 | 0.02 | 0.06 |
-| Isolation Forest | 0.18 | 0.29 | 0.46 |
-| Local Outlier Factor | 5.22 | 0.00 | 5.22 |
-| Robust Covariance | 6.24 | 0.03 | 6.28 |
+| One-Class SVM | 70.44 | 36.68 | 107.13 |
+| One-Class SVM (SGD) | 0.06 | 0.01 | 0.07 |
+| Isolation Forest | 0.17 | 0.31 | 0.47 |
+| Local Outlier Factor | 5.92 | 0.00 | 5.92 |
+| Robust Covariance | 6.59 | 0.03 | 6.62 |
+| Autoencoder (GPU) | 2.60 | 0.02 | 2.63 |
 
-One-Class SVM (RBF) is by far the slowest (~O(n²)) — and with `nu=0.05` it is now
-markedly slower than before (93 s at 80k). Isolation Forest is the strongest
+One-Class SVM (RBF) is by far the slowest (~O(n²)) — at 107 s at 80k it is
+markedly slower than Isolation Forest. Isolation Forest is the strongest
 ranker **and** the fastest with a real `predict`. LOF fits and predicts in one
 `fit_predict` step, so its predict time is reported as 0.
 
+> **CPU vs GPU caveat:** The Autoencoder is the only model trained on the GPU (PyTorch on an RTX 3050 Ti); the other models are CPU-only scikit-learn. Its runtime column therefore is **not apples-to-apples** — it includes GPU compute plus host↔device transfer on different hardware. **ROC-AUC, being threshold- and hardware-independent, is the fair cross-model comparison.** GPU training is also inherently CPU+GPU cooperative (the CPU loads and batches data; the GPU does the forward/backward math), so "GPU-only" training does not exist.
+
 **Plots generated:**
 1. Performance metrics bar chart (accuracy, precision, recall, F1)
-2. Confusion matrices for all 5 algorithms
+2. Confusion matrices for all 6 algorithms
 3. Computational efficiency comparison (horizontal bar chart)
 
 ### Limitations
@@ -192,6 +198,7 @@ quality directly rather than how well the MAD cutoff happens to match the base r
 |---|---|---|---|---|
 | **Isolation Forest** | **0.9809** | **0.9612** | **0.9489** | **0.9467** |
 | One-Class SVM | 0.9796 | 0.9635 | 0.9470 | 0.9430 |
+| Autoencoder (GPU) | 0.9718 | 0.9523 | 0.9325 | 0.9432 |
 | Robust Covariance | 0.9389 | 0.8882 | 0.9250 | 0.9191 |
 | Local Outlier Factor | 0.7696 | 0.5481 | 0.5052 | 0.5099 |
 | One-Class SVM (SGD) | 0.0185 | 0.0504 | 0.1389 | 0.3668 |
@@ -205,6 +212,7 @@ over-flags relative to the 0.17% base rate.
 |---|---|---|---|---|
 | One-Class SVM | 0.00% | 16.49% | 15.94% | 15.26% |
 | Isolation Forest | 5.10% | 5.73% | 5.89% | 5.47% |
+| Autoencoder (GPU) | 5.20% | 3.56% | 2.57% | 3.23% |
 | One-Class SVM (SGD) | 0.00% | 0.00% | 1.22% | 7.28% |
 | Local Outlier Factor | 1.28% | 0.86% | 0.68% | 0.64% |
 | Robust Covariance | 0.71% | 0.75% | 0.75% | 0.72% |
@@ -213,11 +221,12 @@ over-flags relative to the 0.17% base rate.
 
 | Model | 30k | 80k | 150k | 230k |
 |---|---|---|---|---|
-| Isolation Forest | 0.29 | 0.46 | 0.88 | 1.20 |
-| One-Class SVM (SGD) | 0.02 | 0.06 | 0.14 | 0.24 |
-| Robust Covariance | 2.63 | 6.28 | 12.12 | 20.46 |
-| Local Outlier Factor | 3.43 | 5.22 | 17.90 | 43.26 |
-| One-Class SVM | 13.85 | 93.04 | 324.66 | **717.48** |
+| One-Class SVM (SGD) | 0.03 | 0.07 | 0.17 | 0.28 |
+| Isolation Forest | 0.30 | 0.47 | 1.07 | 1.67 |
+| Autoencoder (GPU) | 2.67 | 2.63 | 5.25 | 6.82 |
+| Robust Covariance | 2.76 | 6.62 | 16.11 | 24.31 |
+| Local Outlier Factor | 3.55 | 5.92 | 25.39 | 57.15 |
+| One-Class SVM | 16.52 | 107.13 | 370.36 | **893.62** |
 
 ### What the sweep shows
 
@@ -233,9 +242,9 @@ over-flags relative to the 0.17% base rate.
   size, i.e. consistently worse than random. This is an optimisation pathology of
   the linear SGD solver, not a data-volume problem.
 - **Runtime: OCSVM is now both quadratic *and* slower** — with `nu=0.05` it runs
-  13.8 → 93 → 325 → 717 s for 30k → 230k (an empirical exponent ≈ 2.0, matching
+  16.5 → 107 → 370 → 894 s for 30k → 230k (an empirical exponent ≈ 2.0, matching
   kernel-matrix complexity). Isolation Forest stays effectively flat (0.3 s →
-  1.2 s), so more data buys OCSVM runtime, not ranking quality.
+  1.7 s), so more data buys OCSVM runtime, not ranking quality.
 
 Cross-size plots (`results/comparison/rocauc_vs_size.png`, `f1_vs_size.png`,
 `runtime_vs_size.png`) summarise this in one glance — `runtime_vs_size.png`
@@ -296,7 +305,7 @@ exactly the future work the paper recommends in its Conclusion and Limitations.
   practical anomaly detection scenarios"*.
 - **Our sample-size sweep extends the paper's scalability discussion** with
   empirical numbers: OCSVM's runtime exponent ≈ 2.0 (clean quadratic, now slower
-  at `nu=0.05`), while Isolation Forest stays effectively flat (0.3 s → 1.2 s for
+  at `nu=0.05`), while Isolation Forest stays effectively flat (0.3 s → 1.7 s for
   30k → 230k) and its ROC-AUC stays in the 0.95–0.98 band throughout.
 
 In short: this project is not a re-implementation of the paper — it is the
@@ -312,7 +321,7 @@ data-driven MAD cutoff on its own anomaly scores (`MAD_K=3.0`), so the true frau
 rate never touches the pipeline. Judged by the **threshold-independent ROC-AUC**,
 **Isolation Forest (0.95–0.98) and One-Class SVM (0.94–0.98) are excellent and
 stable rankers of fraud across 30k–230k rows** — Isolation Forest with the added
-advantage of being orders of magnitude faster (≈1.2 s at 230k vs ≈717 s for
+advantage of being orders of magnitude faster (≈1.7 s at 230k vs ≈894 s for
 OCSVM). Robust Covariance ranks well too (~0.89–0.94) but over-flags; LOF
 collapses to ~random and SGD-OCSVM is inverted.
 
@@ -331,6 +340,9 @@ operating threshold without labels remains the open problem.
 ```bash
 # Install dependencies
 pip install pandas numpy scikit-learn matplotlib seaborn jupyter tabulate
+# PyTorch with CUDA — install from https://pytorch.org for your CUDA version
+# (used by the GPU autoencoder; falls back to CPU automatically)
+# pip install torch  ← use the wheel from pytorch.org that matches your CUDA version
 
 # Start Jupyter
 cd detekcija-anomalija/src
@@ -353,6 +365,7 @@ Run notebooks in order (from `src/`):
 - seaborn
 - jupyter
 - tabulate (for the cross-size markdown summary)
+- torch — PyTorch with CUDA — install from https://pytorch.org for your CUDA version (used by the GPU autoencoder; falls back to CPU automatically)
 
 ---
 

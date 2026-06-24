@@ -61,3 +61,29 @@ Robust Covariance
     accuracy                           0.57    230000
    macro avg       0.50      0.74      0.37    230000
 weighted avg       1.00      0.57      0.73    230000
+
+
+==================================================
+Autoencoder (GPU)
+==================================================
+              precision    recall  f1-score   support
+
+      Normal       1.00      0.91      0.96    229609
+       Fraud       0.02      0.84      0.03       391
+
+    accuracy                           0.91    230000
+   macro avg       0.51      0.88      0.49    230000
+weighted avg       1.00      0.91      0.95    230000
+
+
+==================================================
+Logistic Regression (supervised — 30 % test set)
+==================================================
+              precision    recall  f1-score   support
+
+      Normal       1.00      0.97      0.99     68883
+       Fraud       0.05      0.90      0.10       117
+
+    accuracy                           0.97     69000
+   macro avg       0.53      0.93      0.54     69000
+weighted avg       1.00      0.97      0.98     69000
