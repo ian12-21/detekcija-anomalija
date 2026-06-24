@@ -21,7 +21,6 @@ import seaborn as sns
 
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import (
-    accuracy_score, precision_score, recall_score, f1_score,
     confusion_matrix, classification_report, ConfusionMatrixDisplay
 )
 from sklearn.svm import OneClassSVM
@@ -29,6 +28,8 @@ from sklearn.linear_model import SGDOneClassSVM
 from sklearn.ensemble import IsolationForest
 from sklearn.neighbors import LocalOutlierFactor
 from sklearn.covariance import EllipticEnvelope
+
+from anomaly_utils import anomaly_scores, mad_threshold, evaluate, MAD_K, DEFAULT_NU
 
 warnings.filterwarnings("ignore")
 sns.set_style("whitegrid")
@@ -46,29 +47,23 @@ def size_label(n):
     return f"{n // 1000}k"
 
 
-def build_models(contamination):
-    """(name, estimator, uses_fit_predict) — identical to notebook 02."""
+def build_models():
+    """(name, estimator, uses_fit_predict) — label-free; MAD sets the budget."""
     return [
         ("One-Class SVM",
-         OneClassSVM(kernel="rbf", gamma=0.1, nu=contamination), False),
+         OneClassSVM(kernel="rbf", gamma=0.1, nu=DEFAULT_NU), False),
         ("One-Class SVM (SGD)",
-         SGDOneClassSVM(nu=contamination, max_iter=1000,
+         SGDOneClassSVM(nu=DEFAULT_NU, max_iter=1000,
                         learning_rate="optimal", random_state=RANDOM_STATE), False),
         ("Isolation Forest",
-         IsolationForest(n_estimators=100, contamination=contamination,
+         IsolationForest(n_estimators=100, contamination="auto",
                          max_samples="auto", random_state=RANDOM_STATE), False),
         ("Local Outlier Factor",
-         LocalOutlierFactor(n_neighbors=20, contamination=contamination,
+         LocalOutlierFactor(n_neighbors=20, contamination="auto",
                             novelty=False), True),
         ("Robust Covariance",
-         EllipticEnvelope(contamination=contamination,
-                          random_state=RANDOM_STATE), False),
+         EllipticEnvelope(contamination=0.1, random_state=RANDOM_STATE), False),
     ]
-
-
-def convert_predictions(preds):
-    """sklearn: -1=outlier, 1=inlier  ->  ours: 1=fraud, 0=normal"""
-    return np.where(preds == -1, 1, 0)
 
 
 def run_one_size(X, y_true, n, out_dir):
@@ -76,77 +71,97 @@ def run_one_size(X, y_true, n, out_dir):
     sample_idx = X.sample(n=n, random_state=RANDOM_STATE).index
     X_sample = X.loc[sample_idx]
     y_sample = y_true.loc[sample_idx].to_numpy()
-    contamination = max(y_sample.mean(), 1e-4)
+    true_rate = y_sample.mean()
 
     print(f"\n=== {size_label(n)}: {n:,} rows | "
           f"{y_sample.sum():,} frauds | "
-          f"contamination={contamination:.4%} ===", flush=True)
+          f"true fraud rate={true_rate:.4%} ===", flush=True)
 
     results, timing, metrics, reports = {}, {}, [], []
 
-    for name, model, uses_fit_predict in build_models(contamination):
+    for name, model, uses_fit_predict in build_models():
         print(f"  {name} ...", end="", flush=True)
         if uses_fit_predict:
             t0 = time.time()
-            raw = model.fit_predict(X_sample)
-            fit_time, pred_time = time.time() - t0, 0.0
+            model.fit_predict(X_sample)
+            fit_time = time.time() - t0
+            t0 = time.time()
+            scores = anomaly_scores(model, X_sample, True)
+            pred_time = time.time() - t0
         else:
             t0 = time.time()
             model.fit(X_sample)
             fit_time = time.time() - t0
             t0 = time.time()
-            raw = model.predict(X_sample)
+            scores = anomaly_scores(model, X_sample, False)
             pred_time = time.time() - t0
 
-        preds = convert_predictions(raw)
+        preds = mad_threshold(scores)
         results[name] = preds
         timing[name] = {"Fit Time (s)": fit_time,
                         "Predict Time (s)": pred_time}
-        metrics.append({
-            "Model": name,
-            "Accuracy": accuracy_score(y_sample, preds),
-            "Precision": precision_score(y_sample, preds, zero_division=0),
-            "Recall": recall_score(y_sample, preds, zero_division=0),
-            "F1 Score": f1_score(y_sample, preds, zero_division=0),
-        })
+        metrics.append({"Model": name,
+                        **evaluate(y_sample, preds, scores),
+                        "Implied Contam.": preds.mean()})
         reports.append(
             f"{'=' * 50}\n{name}\n{'=' * 50}\n"
             + classification_report(y_sample, preds,
-                                    target_names=["Normal", "Fraud"]))
-        print(f" fit={fit_time:.2f}s predict={pred_time:.2f}s "
-              f"flagged={preds.sum():,}", flush=True)
+                                    target_names=["Normal", "Fraud"],
+                                    zero_division=0))
+        print(f" fit={fit_time:.2f}s score={pred_time:.2f}s "
+              f"flagged={int(preds.sum()):,} ({preds.mean():.4%})", flush=True)
 
     metrics_df = pd.DataFrame(metrics).set_index("Model")
     timing_df = pd.DataFrame(timing).T
     timing_df["Total (s)"] = timing_df.sum(axis=1)
-    best = metrics_df["F1 Score"].idxmax()
+    best_f1 = metrics_df["F1 Score"].idxmax()
+    best_auc = metrics_df["ROC-AUC"].idxmax()
 
     # ---- tables ----
     metrics_df.to_csv(os.path.join(out_dir, "metrics.csv"))
     timing_df.round(4).to_csv(os.path.join(out_dir, "timing.csv"))
     with open(os.path.join(out_dir, "classification_reports.txt"), "w") as f:
         f.write("\n\n".join(reports))
+
+    pct_cols = ["Accuracy", "Precision", "Recall", "F1 Score",
+                "ROC-AUC", "Implied Contam."]
+    disp = metrics_df.copy()
+    for c in pct_cols:
+        disp[c] = (disp[c] * 100).round(2).astype(str) + " %"
+    disp["R2"] = metrics_df["R2"].round(4).astype(str)
+    disp = disp[["Accuracy", "Precision", "Recall", "F1 Score",
+                 "ROC-AUC", "R2", "Implied Contam."]]
     with open(os.path.join(out_dir, "summary.txt"), "w") as f:
         f.write(f"Sample size: {n:,} rows\n"
                 f"Frauds: {int(y_sample.sum()):,}\n"
-                f"Contamination: {contamination:.4%}\n"
-                f"Best F1: {best} ({metrics_df.loc[best, 'F1 Score']:.2%})\n\n"
-                f"{(metrics_df * 100).round(2).astype(str) + ' %'}\n\n"
+                f"True fraud rate (reference only): {true_rate:.4%}\n"
+                f"Best F1: {best_f1} ({metrics_df.loc[best_f1, 'F1 Score']:.2%})\n"
+                f"Best ROC-AUC: {best_auc} "
+                f"({metrics_df.loc[best_auc, 'ROC-AUC']:.4f})\n\n"
+                f"{disp}\n\n"
                 f"{timing_df.round(3)}\n")
 
     # ---- metrics bar chart ----
-    fig, axes = plt.subplots(2, 2, figsize=(14, 10))
-    for ax, metric in zip(axes.ravel(),
-                          ["Accuracy", "Precision", "Recall", "F1 Score"]):
+    fig, axes = plt.subplots(2, 3, figsize=(16, 10))
+    metric_names = ["Accuracy", "Precision", "Recall",
+                    "F1 Score", "ROC-AUC", "R2"]
+    for ax, metric in zip(axes.ravel(), metric_names):
         vals = metrics_df[metric].values
         bars = ax.bar(range(len(metrics_df)), vals, color=COLORS)
         ax.set_title(metric, fontsize=14, fontweight="bold")
-        ax.set_ylim(0, 1.15)
+        if metric == "R2":
+            lo, hi = min(vals.min(), 0.0), max(vals.max(), 0.0)
+            pad = 0.1 * (hi - lo + 1e-9)
+            ax.set_ylim(lo - pad, hi + pad + 0.05)
+            fmt = lambda v: f"{v:.3f}"
+        else:
+            ax.set_ylim(0, 1.15)
+            fmt = lambda v: f"{v:.1%}"
         ax.set_xticks(range(len(metrics_df)))
         ax.set_xticklabels(metrics_df.index, rotation=30, ha="right", fontsize=9)
         for bar, v in zip(bars, vals):
-            ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.02,
-                    f"{v:.1%}", ha="center", va="bottom",
+            ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height(),
+                    fmt(v), ha="center", va="bottom",
                     fontsize=9, fontweight="bold")
     plt.suptitle(f"Model Performance — {size_label(n)} sample",
                  fontsize=16, fontweight="bold")
@@ -203,6 +218,9 @@ def main():
                 "Precision": m_df.loc[model, "Precision"],
                 "Recall": m_df.loc[model, "Recall"],
                 "F1 Score": m_df.loc[model, "F1 Score"],
+                "ROC-AUC": m_df.loc[model, "ROC-AUC"],
+                "R2": m_df.loc[model, "R2"],
+                "Implied Contamination": m_df.loc[model, "Implied Contam."],
                 "Total Time (s)": t_df.loc[model, "Total (s)"],
             })
 
@@ -216,6 +234,8 @@ def main():
     for metric, fname in [("F1 Score", "f1_vs_size.png"),
                           ("Recall", "recall_vs_size.png"),
                           ("Precision", "precision_vs_size.png"),
+                          ("ROC-AUC", "rocauc_vs_size.png"),
+                          ("R2", "r2_vs_size.png"),
                           ("Total Time (s)", "runtime_vs_size.png")]:
         fig, ax = plt.subplots(figsize=(10, 6))
         for model, c in zip(models, COLORS):
@@ -237,7 +257,8 @@ def main():
     # pivot tables (model x size) per metric
     with open(os.path.join(comp_dir, "summary.md"), "w") as f:
         f.write("# Sample-size sweep — summary\n\n")
-        for metric in ["F1 Score", "Recall", "Precision", "Total Time (s)"]:
+        for metric in ["F1 Score", "Recall", "Precision", "ROC-AUC", "R2",
+                       "Implied Contamination", "Total Time (s)"]:
             piv = long_df.pivot(index="Model", columns="Sample Size",
                                 values=metric)
             piv.columns = [size_label(c) for c in piv.columns]
