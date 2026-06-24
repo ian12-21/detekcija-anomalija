@@ -4,26 +4,24 @@ True fraud rate (reference only): 0.1693%
 Best F1: One-Class SVM (15.94%)
 Best ROC-AUC: Logistic Regression (0.9803)
 
-                     Accuracy Precision  ...         R2 Implied Contam.
-Model                                    ...                           
-One-Class SVM         98.87 %    9.12 %  ...    -5.6964          1.18 %
-One-Class SVM (SGD)   99.25 %    0.79 %  ...    -3.4524          0.59 %
-Isolation Forest      95.44 %    3.05 %  ...   -25.9472          4.67 %
-Local Outlier Factor  92.26 %    0.35 %  ...   -44.7744          7.62 %
-Robust Covariance     58.56 %    0.38 %  ...  -244.1277         41.58 %
-Autoencoder (GPU)     89.04 %    1.31 %  ...   -63.8618         11.08 %
-Logistic Regression   96.65 %    4.51 %  ...   -18.8889           3.5 %
-
-[7 rows x 7 columns]
+                     Accuracy Precision   Recall F1 Score  ROC-AUC         R2 Implied Contam.
+Model                                                                                        
+One-Class SVM         98.87 %    9.12 %  63.39 %  15.94 %   94.7 %    -5.6964          1.18 %
+One-Class SVM (SGD)   99.25 %    0.79 %   2.76 %   1.22 %  13.89 %    -3.4524          0.59 %
+Isolation Forest      95.44 %    3.05 %  84.25 %   5.89 %  94.89 %   -25.9472          4.67 %
+Local Outlier Factor  92.26 %    0.35 %  15.75 %   0.68 %  50.52 %   -44.7744          7.62 %
+Robust Covariance     58.56 %    0.38 %  92.13 %   0.75 %   92.5 %  -244.1277         41.58 %
+Autoencoder (GPU)     89.04 %    1.31 %  85.43 %   2.57 %  93.25 %   -63.8618         11.08 %
+Logistic Regression   96.65 %    4.51 %  93.42 %    8.6 %  98.03 %   -18.8889           3.5 %
 
                       Fit Time (s)  Predict Time (s)  Total (s)
-One-Class SVM              253.768           116.594    370.362
-One-Class SVM (SGD)          0.153             0.016      0.169
-Isolation Forest             0.275             0.800      1.075
-Local Outlier Factor        25.390             0.002     25.392
-Robust Covariance           16.038             0.073     16.111
-Autoencoder (GPU)            5.188             0.064      5.252
-Logistic Regression          0.337             0.016      0.353
+One-Class SVM              321.097           137.588    458.685
+One-Class SVM (SGD)          0.159             0.025      0.184
+Isolation Forest             0.371             0.829      1.200
+Local Outlier Factor        24.696             0.000     24.696
+Robust Covariance           15.959             0.096     16.055
+Autoencoder (GPU)            5.364             0.067      5.430
+Logistic Regression          0.315             0.021      0.336
 
 Note: Logistic Regression is a supervised baseline (trained on 70 %, evaluated on 30 % stratified hold-out).
 All other models are unsupervised (scored on the full sample).

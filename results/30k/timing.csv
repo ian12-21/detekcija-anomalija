@@ -1,8 +1,8 @@
 ,Fit Time (s),Predict Time (s),Total (s)
-One-Class SVM,8.6779,7.843,16.5208
-One-Class SVM (SGD),0.0206,0.0045,0.0251
-Isolation Forest,0.1735,0.1255,0.299
-Local Outlier Factor,3.5538,0.0,3.5538
-Robust Covariance,2.7442,0.0142,2.7585
-Autoencoder (GPU),2.6052,0.0625,2.6677
-Logistic Regression,0.0797,0.0058,0.0855
+One-Class SVM,7.3999,6.0594,13.4593
+One-Class SVM (SGD),0.0192,0.004,0.0232
+Isolation Forest,0.1411,0.0999,0.241
+Local Outlier Factor,3.3643,0.0,3.3643
+Robust Covariance,2.4208,0.0121,2.4329
+Autoencoder (GPU),1.8975,0.0445,1.942
+Logistic Regression,0.0587,0.004,0.0627
