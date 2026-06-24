@@ -2,3 +2,4 @@ data/creditcard.csv
 src/.ipynb_checkpoints/
 .venv/
 ruvector.db
+__pycache__/
