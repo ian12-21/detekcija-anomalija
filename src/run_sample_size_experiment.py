@@ -161,7 +161,8 @@ def run_one_size(X, y_true, n, out_dir):
         ax.set_xticklabels(metrics_df.index, rotation=30, ha="right", fontsize=9)
         for bar, v in zip(bars, vals):
             ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height(),
-                    fmt(v), ha="center", va="bottom",
+                    fmt(v), ha="center",
+                    va="bottom" if v >= 0 else "top",
                     fontsize=9, fontweight="bold")
     plt.suptitle(f"Model Performance — {size_label(n)} sample",
                  fontsize=16, fontweight="bold")
