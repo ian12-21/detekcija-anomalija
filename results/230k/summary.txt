@@ -1,19 +1,22 @@
 Sample size: 230,000 rows
 Frauds: 391
-Contamination: 0.1700%
-Best F1: Isolation Forest (28.39%)
+True fraud rate (reference only): 0.1700%
+Best F1: One-Class SVM (15.26%)
+Best ROC-AUC: Isolation Forest (0.9467)
 
-                     Accuracy Precision   Recall F1 Score
-Model                                                    
-One-Class SVM         97.81 %    3.82 %   49.1 %   7.09 %
-One-Class SVM (SGD)   99.83 %     0.0 %    0.0 %    0.0 %
-Isolation Forest      99.76 %   28.39 %  28.39 %  28.39 %
-Local Outlier Factor  99.66 %     0.0 %    0.0 %    0.0 %
-Robust Covariance     99.66 %    0.51 %   0.51 %   0.51 %
+                     Accuracy Precision  ...         R2 Implied Contam.
+Model                                    ...                           
+One-Class SVM         98.73 %     8.6 %  ...    -6.5115          1.33 %
+One-Class SVM (SGD)   99.67 %    6.93 %  ...    -0.9573          0.19 %
+Isolation Forest      95.06 %    2.83 %  ...   -28.1339          5.06 %
+Local Outlier Factor  92.14 %    0.33 %  ...   -45.2884          7.74 %
+Robust Covariance     57.25 %    0.36 %  ...  -250.9039         42.89 %
+
+[5 rows x 7 columns]
 
                       Fit Time (s)  Predict Time (s)  Total (s)
-One-Class SVM              284.714            72.328    357.042
-One-Class SVM (SGD)          0.323             0.012      0.335
-Isolation Forest             0.761             0.672      1.432
-Local Outlier Factor        52.250             0.000     52.250
-Robust Covariance           19.850             0.046     19.896
+One-Class SVM              508.415           209.064    717.478
+One-Class SVM (SGD)          0.222             0.016      0.238
+Isolation Forest             0.301             0.902      1.203
+Local Outlier Factor        43.256             0.000     43.256
+Robust Covariance           20.379             0.078     20.457

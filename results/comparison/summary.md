@@ -1,42 +1,72 @@
-# Sample-size sweep â€” summary
+# Sample-size sweep — summary
 
 ## F1 Score
 
 | Model                |    30k |    80k |   150k |   230k |
 |:---------------------|-------:|-------:|-------:|-------:|
-| Isolation Forest     | 0.3191 | 0.3386 | 0.3031 | 0.2839 |
-| Local Outlier Factor | 0.0213 | 0      | 0      | 0      |
-| One-Class SVM        | 0.031  | 0.0425 | 0.059  | 0.0709 |
-| One-Class SVM (SGD)  | 0      | 0      | 0      | 0      |
-| Robust Covariance    | 0      | 0.1575 | 0.0039 | 0.0051 |
+| Isolation Forest     | 0.051  | 0.0573 | 0.0589 | 0.0547 |
+| Local Outlier Factor | 0.0128 | 0.0086 | 0.0068 | 0.0064 |
+| One-Class SVM        | 0      | 0.1649 | 0.1594 | 0.1526 |
+| One-Class SVM (SGD)  | 0      | 0      | 0.0122 | 0.0728 |
+| Robust Covariance    | 0.0071 | 0.0075 | 0.0075 | 0.0072 |
 
 ## Recall
 
 | Model                |    30k |    80k |   150k |   230k |
 |:---------------------|-------:|-------:|-------:|-------:|
-| Isolation Forest     | 0.3191 | 0.3386 | 0.3031 | 0.2839 |
-| Local Outlier Factor | 0.0213 | 0      | 0      | 0      |
-| One-Class SVM        | 0.4894 | 0.5118 | 0.4803 | 0.491  |
-| One-Class SVM (SGD)  | 0      | 0      | 0      | 0      |
-| Robust Covariance    | 0      | 0.1575 | 0.0039 | 0.0051 |
+| Isolation Forest     | 0.8723 | 0.8425 | 0.8425 | 0.8414 |
+| Local Outlier Factor | 0.234  | 0.1969 | 0.1575 | 0.1483 |
+| One-Class SVM        | 0      | 0.4409 | 0.6339 | 0.6752 |
+| One-Class SVM (SGD)  | 0      | 0      | 0.0276 | 0.0767 |
+| Robust Covariance    | 0.9362 | 0.9291 | 0.9213 | 0.913  |
 
 ## Precision
 
 | Model                |    30k |    80k |   150k |   230k |
 |:---------------------|-------:|-------:|-------:|-------:|
-| Isolation Forest     | 0.3191 | 0.3386 | 0.3031 | 0.2839 |
-| Local Outlier Factor | 0.0213 | 0      | 0      | 0      |
-| One-Class SVM        | 0.016  | 0.0222 | 0.0314 | 0.0382 |
-| One-Class SVM (SGD)  | 0      | 0      | 0      | 0      |
-| Robust Covariance    | 0      | 0.1575 | 0.0039 | 0.0051 |
+| Isolation Forest     | 0.0263 | 0.0297 | 0.0305 | 0.0283 |
+| Local Outlier Factor | 0.0066 | 0.0044 | 0.0035 | 0.0033 |
+| One-Class SVM        | 0      | 0.1014 | 0.0912 | 0.086  |
+| One-Class SVM (SGD)  | 0      | 0      | 0.0079 | 0.0693 |
+| Robust Covariance    | 0.0036 | 0.0038 | 0.0038 | 0.0036 |
+
+## ROC-AUC
+
+| Model                |    30k |    80k |   150k |   230k |
+|:---------------------|-------:|-------:|-------:|-------:|
+| Isolation Forest     | 0.9809 | 0.9612 | 0.9489 | 0.9467 |
+| Local Outlier Factor | 0.7696 | 0.5481 | 0.5052 | 0.5099 |
+| One-Class SVM        | 0.9796 | 0.9635 | 0.947  | 0.943  |
+| One-Class SVM (SGD)  | 0.0185 | 0.0504 | 0.1389 | 0.3668 |
+| Robust Covariance    | 0.9389 | 0.8882 | 0.925  | 0.9191 |
+
+## R2
+
+| Model                |       30k |       80k |      150k |      230k |
+|:---------------------|----------:|----------:|----------:|----------:|
+| Isolation Forest     |  -31.4977 |  -26.7527 |  -25.9472 |  -28.1339 |
+| Local Outlier Factor |  -35.0565 |  -44.6315 |  -44.7744 |  -45.2884 |
+| One-Class SVM        |   -0.0016 |   -3.4717 |   -5.6964 |   -6.5115 |
+| One-Class SVM (SGD)  |   -0.1294 |   -3.1089 |   -3.4524 |   -0.9573 |
+| Robust Covariance    | -262.093  | -244.531  | -244.128  | -250.904  |
+
+## Implied Contamination
+
+| Model                |    30k |    80k |   150k |   230k |
+|:---------------------|-------:|-------:|-------:|-------:|
+| Isolation Forest     | 0.052  | 0.0451 | 0.0467 | 0.0506 |
+| Local Outlier Factor | 0.0556 | 0.0714 | 0.0762 | 0.0774 |
+| One-Class SVM        | 0      | 0.0069 | 0.0118 | 0.0133 |
+| One-Class SVM (SGD)  | 0.0002 | 0.0049 | 0.0059 | 0.0019 |
+| Robust Covariance    | 0.4129 | 0.3905 | 0.4158 | 0.4289 |
 
 ## Total Time (s)
 
-| Model                |    30k |     80k |     150k |     230k |
-|:---------------------|-------:|--------:|---------:|---------:|
-| Isolation Forest     | 0.2487 |  0.569  |   0.9476 |   1.4324 |
-| Local Outlier Factor | 0.6937 |  4.8068 |  17.8764 |  52.2498 |
-| One-Class SVM        | 5.8144 | 52.8543 | 136.659  | 357.042  |
-| One-Class SVM (SGD)  | 0.0197 |  0.1115 |   0.207  |   0.3354 |
-| Robust Covariance    | 2.6033 |  8.5791 |  14.1716 |  19.8959 |
+| Model                |     30k |     80k |     150k |     230k |
+|:---------------------|--------:|--------:|---------:|---------:|
+| Isolation Forest     |  0.2861 |  0.4605 |   0.8761 |   1.2027 |
+| Local Outlier Factor |  3.4339 |  5.2181 |  17.9014 |  43.2557 |
+| One-Class SVM        | 13.8487 | 93.0412 | 324.659  | 717.478  |
+| One-Class SVM (SGD)  |  0.0158 |  0.0637 |   0.1431 |   0.2384 |
+| Robust Covariance    |  2.6294 |  6.2763 |  12.1171 |  20.457  |
 
