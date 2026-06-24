@@ -24,7 +24,8 @@ from sklearn.metrics import (
     confusion_matrix, classification_report, ConfusionMatrixDisplay
 )
 from sklearn.svm import OneClassSVM
-from sklearn.linear_model import SGDOneClassSVM
+from sklearn.linear_model import SGDOneClassSVM, LogisticRegression
+from sklearn.model_selection import train_test_split
 from sklearn.ensemble import IsolationForest
 from sklearn.neighbors import LocalOutlierFactor
 from sklearn.covariance import EllipticEnvelope
@@ -40,7 +41,7 @@ SAMPLE_SIZES = [30_000, 80_000, 150_000, 230_000]
 HERE = os.path.dirname(os.path.abspath(__file__))
 DATA = os.path.join(HERE, "..", "data", "creditcard.csv")
 RESULTS = os.path.join(HERE, "..", "results")
-COLORS = ["#2196F3", "#FF9800", "#4CAF50", "#F44336", "#9C27B0"]
+COLORS = ["#2196F3", "#FF9800", "#4CAF50", "#F44336", "#9C27B0", "#E91E63"]
 
 
 def size_label(n):
@@ -63,6 +64,15 @@ def build_models():
                             novelty=False), True),
         ("Robust Covariance",
          EllipticEnvelope(contamination=0.1, random_state=RANDOM_STATE), False),
+    ]
+
+
+def build_supervised_models():
+    """Supervised baseline: trained with labels on a 70/30 stratified split."""
+    return [
+        ("Logistic Regression",
+         LogisticRegression(max_iter=1000, class_weight="balanced",
+                            random_state=RANDOM_STATE)),
     ]
 
 
@@ -97,7 +107,7 @@ def run_one_size(X, y_true, n, out_dir):
             pred_time = time.time() - t0
 
         preds = mad_threshold(scores)
-        results[name] = preds
+        results[name] = (preds, y_sample)
         timing[name] = {"Fit Time (s)": fit_time,
                         "Predict Time (s)": pred_time}
         metrics.append({"Model": name,
@@ -109,6 +119,34 @@ def run_one_size(X, y_true, n, out_dir):
                                     target_names=["Normal", "Fraud"],
                                     zero_division=0))
         print(f" fit={fit_time:.2f}s score={pred_time:.2f}s "
+              f"flagged={int(preds.sum()):,} ({preds.mean():.4%})", flush=True)
+
+    # supervised baseline — 70/30 stratified split
+    X_train, X_test, y_train, y_test = train_test_split(
+        X_sample, y_sample, test_size=0.3,
+        random_state=RANDOM_STATE, stratify=y_sample
+    )
+    for name, model in build_supervised_models():
+        print(f"  {name} ...", end="", flush=True)
+        t0 = time.time()
+        model.fit(X_train, y_train)
+        fit_time = time.time() - t0
+        t0 = time.time()
+        scores = model.predict_proba(X_test)[:, 1]
+        preds = model.predict(X_test)
+        pred_time = time.time() - t0
+
+        results[name] = (preds, y_test)
+        timing[name] = {"Fit Time (s)": fit_time, "Predict Time (s)": pred_time}
+        metrics.append({"Model": name,
+                        **evaluate(y_test, preds, scores),
+                        "Implied Contam.": preds.mean()})
+        reports.append(
+            f"{'=' * 50}\n{name} (supervised — 30 % test set)\n{'=' * 50}\n"
+            + classification_report(y_test, preds,
+                                    target_names=["Normal", "Fraud"],
+                                    zero_division=0))
+        print(f" fit={fit_time:.2f}s predict={pred_time:.2f}s "
               f"flagged={int(preds.sum()):,} ({preds.mean():.4%})", flush=True)
 
     metrics_df = pd.DataFrame(metrics).set_index("Model")
@@ -139,7 +177,10 @@ def run_one_size(X, y_true, n, out_dir):
                 f"Best ROC-AUC: {best_auc} "
                 f"({metrics_df.loc[best_auc, 'ROC-AUC']:.4f})\n\n"
                 f"{disp}\n\n"
-                f"{timing_df.round(3)}\n")
+                f"{timing_df.round(3)}\n"
+                f"\nNote: Logistic Regression is a supervised baseline "
+                f"(trained on 70 %, evaluated on 30 % stratified hold-out).\n"
+                f"All other models are unsupervised (scored on the full sample).\n")
 
     # ---- metrics bar chart ----
     fig, axes = plt.subplots(2, 3, figsize=(16, 10))
@@ -173,12 +214,11 @@ def run_one_size(X, y_true, n, out_dir):
     # ---- confusion matrices ----
     fig, axes = plt.subplots(2, 3, figsize=(16, 10))
     axes_flat = axes.ravel()
-    for i, (name, preds) in enumerate(results.items()):
-        disp = ConfusionMatrixDisplay(confusion_matrix(y_sample, preds),
+    for i, (name, (preds, y_used)) in enumerate(results.items()):
+        disp = ConfusionMatrixDisplay(confusion_matrix(y_used, preds),
                                       display_labels=["Normal", "Fraud"])
         disp.plot(ax=axes_flat[i], cmap="Blues", values_format=",d")
         axes_flat[i].set_title(name, fontsize=11, fontweight="bold")
-    axes_flat[5].set_visible(False)
     plt.suptitle(f"Confusion Matrices — {size_label(n)} sample",
                  fontsize=16, fontweight="bold")
     plt.tight_layout()
