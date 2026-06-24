@@ -81,6 +81,8 @@ class AutoencoderDetector:
         return self
 
     def decision_function(self, X):
+        if self.model_ is None:
+            raise RuntimeError("Call fit() before decision_function().")
         self.model_.eval()
         data = self._to_tensor(X).to(self.device)
         errs = torch.empty(data.shape[0], device=self.device)

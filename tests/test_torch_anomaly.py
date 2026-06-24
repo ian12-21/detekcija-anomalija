@@ -1,5 +1,6 @@
 import sys, os
 import numpy as np
+import pytest
 from sklearn.metrics import roc_auc_score
 
 # make src/ importable regardless of where pytest runs
@@ -41,3 +42,9 @@ def test_cpu_device_runs_without_cuda():
     det.fit(X)
     assert det.device == "cpu"
     assert det.decision_function(X).shape == (X.shape[0],)
+
+
+def test_decision_function_before_fit_raises():
+    det = AutoencoderDetector(device="cpu", verbose=False)
+    with pytest.raises(RuntimeError):
+        det.decision_function(np.zeros((4, 8), dtype=np.float32))
