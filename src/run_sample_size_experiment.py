@@ -31,6 +31,7 @@ from sklearn.neighbors import LocalOutlierFactor
 from sklearn.covariance import EllipticEnvelope
 
 from anomaly_utils import anomaly_scores, mad_threshold, evaluate, MAD_K, DEFAULT_NU
+from torch_anomaly import AutoencoderDetector
 
 warnings.filterwarnings("ignore")
 sns.set_style("whitegrid")
@@ -41,7 +42,7 @@ SAMPLE_SIZES = [30_000, 80_000, 150_000, 230_000]
 HERE = os.path.dirname(os.path.abspath(__file__))
 DATA = os.path.join(HERE, "..", "data", "creditcard.csv")
 RESULTS = os.path.join(HERE, "..", "results")
-COLORS = ["#2196F3", "#FF9800", "#4CAF50", "#F44336", "#9C27B0", "#E91E63"]
+COLORS = ["#2196F3", "#FF9800", "#4CAF50", "#F44336", "#9C27B0", "#E91E63", "#00BCD4"]
 
 
 def size_label(n):
@@ -64,6 +65,10 @@ def build_models():
                             novelty=False), True),
         ("Robust Covariance",
          EllipticEnvelope(contamination=0.1, random_state=RANDOM_STATE), False),
+        ("Autoencoder (GPU)",
+         AutoencoderDetector(encoder_dims=(20, 14), epochs=30, batch_size=2048,
+                             lr=1e-3, random_state=RANDOM_STATE, verbose=False),
+         False),
     ]
 
 
@@ -212,13 +217,15 @@ def run_one_size(X, y_true, n, out_dir):
     plt.close(fig)
 
     # ---- confusion matrices ----
-    fig, axes = plt.subplots(2, 3, figsize=(16, 10))
+    fig, axes = plt.subplots(3, 3, figsize=(16, 14))
     axes_flat = axes.ravel()
     for i, (name, (preds, y_used)) in enumerate(results.items()):
         disp = ConfusionMatrixDisplay(confusion_matrix(y_used, preds),
                                       display_labels=["Normal", "Fraud"])
         disp.plot(ax=axes_flat[i], cmap="Blues", values_format=",d")
         axes_flat[i].set_title(name, fontsize=11, fontweight="bold")
+    for j in range(len(results), len(axes_flat)):
+        axes_flat[j].axis("off")
     plt.suptitle(f"Confusion Matrices — {size_label(n)} sample",
                  fontsize=16, fontweight="bold")
     plt.tight_layout()
